@@ -1,0 +1,181 @@
+---
+title: "FinalExam506"
+author: "Gideon Popoola"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(lme4)
+
+```
+
+
+
+```{r cars}
+kidney <- read.csv("C:/Users/olasu/Downloads/kidney.dat", sep="")
+
+kidney$SEX <- factor(kidney$SEX, levels = c(0,1), labels = c("male", "female"))
+kidney$BLOOD <- factor(kidney$BLOOD, levels = c(0, 1) , labels = c("Otherwise", "Pressure"))
+kidney$DISEASE <- factor(kidney$DISEASE, levels = c(0, 1) , labels = c("NO", "Diseases"))
+kidney$AGE = kidney$AGE - mean(kidney$AGE)
+kidney$BMI = kidney$BMI - mean(kidney$BMI)
+kidney$SCC = kidney$SCC - mean(kidney$SCC)
+head(kidney)
+
+```
+
+
+
+```{r pressure, echo=FALSE}
+#Exploratory data analysis
+library(gridExtra)
+par(mfrow=c(1,2))
+ggplot(kidney, aes(x = CC, y = BMI, color=BLOOD, group = BLOOD))+geom_point()+theme_bw()+xlab("CC")+ylab("BMI")+ggtitle("CC against BMI, colored by Blood")+geom_smooth(method = "loess", formula = "y~x")
+ggplot(kidney, aes(x = CC, y = BMI, color=SEX, group = SEX))+geom_point()+theme_bw()+xlab("CC")+ylab("BMI")+ggtitle("CC against BMI, colored by Sex")+geom_smooth(method = "loess", formula = "y~x")
+```
+
+
+```{r}
+#Exploratory data analysis
+ggplot(kidney, aes(x = CC, y = SCC, color=BLOOD))+geom_point()+theme_bw()+xlab("CC")+ylab("SCC")+ggtitle("CC against SCC, colored by blood")+geom_smooth(method = "loess")
+ggplot(kidney, aes(x = CC, y = SCC, color=SEX, group=SEX))+geom_point()+theme_bw()+xlab("CC")+ylab("SCC")+ggtitle("CC against SCC, colored by sex")+geom_smooth(method = "loess")
+
+```
+
+
+
+
+```{r, warning=F, message=F}
+#Exploratory data analysis
+library(GGally)
+library(dplyr)
+library(tidyverse)
+#my dplyr is messing up, you can remove the comment and run this.
+
+#kidney_subset <- select(kidney, -c(1, 6:8))
+
+#ggpairs(kidney_subset) + ggtitle("Correlation plots of all variables")
+
+
+
+```
+
+
+```{r}
+#Simulation of different fixed-effect models
+model40 = lm(CC~AGE+SEX+BLOOD+SCC+BMI, data = kidney)
+model41 = lm(CC~AGE+SCC+BMI, data = kidney)
+model42 = lm(CC~AGE+SCC+BMI+BLOOD, data = kidney)
+model43 = lm(CC~AGE+SCC+BMI+SEX, data = kidney)
+
+
+#AIC and BIC of the simulated models
+AIC(model40, model41, model42, model43)
+BIC(model40, model41, model42, model43)
+```
+
+
+```{r, warning=FALSE, message=FALSE}
+#Simulation of different mixed-effect models
+model51 = lmer(CC~ (1|BLOOD)+I(AGE^2)+SEX+SCC+BMI, data = kidney)
+model55 = lmer(CC~(1|BLOOD)+AGE+SCC+BMI, data = kidney)
+
+
+#model52 is my best model
+model52 <- lmer(CC~ AGE+SCC+BLOOD+BMI+(1|SEX), data = kidney)
+model54 <- lmer(CC~ (1|SEX)+AGE+SCC+BMI, data = kidney)
+
+
+model53 <- lmer(CC~ (BLOOD|SEX)+I(AGE^2)+SCC+BMI, data = kidney)
+model59 = lmer(CC~ (SEX|BLOOD)+AGE+SCC+BMI, data = kidney)
+
+#AIC and BIC of the simulated models
+AIC(model51, model55, model52, model54, model53, model59)   
+BIC(model51, model55, model52, model54, model53, model59)
+
+```
+
+```{r}
+# summary of my preferred model
+fixef(model52)
+ranef(model52)
+summary(model52)
+```
+```{r}
+#Diagnostic plot of my preferred model
+library(effects)
+library(ggResidpanel)
+resid_panel(model52, plots = 'all', smoother = T, qqbands = T)
+plot(allEffects(model52))
+plot(model52)
+```
+```{r}
+3.1333*3.1333
+
+```
+
+
+
+```{r, warning=FALSE, message=FALSE}
+library(nlme)
+library(merTools)
+library(MASS)
+library(arm)
+## Prediction of my model with confidence intervals
+## I centered my variable, so I need to deduct the mean of each variable from my original given data
+newdata6 <- data.frame(AGE = 3.1333, SCC = 0.13467, BMI = 5.499, BLOOD = factor("Pressure"), SEX=factor("male"))
+predictions <- predictInterval(model52, newdata6,  level = 0.95, seed = 111, n.sims = 10000)
+predictions
+
+```
+
+
+
+```{r}
+
+## Checking whether the significant variables has same effect of female and male
+newdata6 <- data.frame(AGE = 3.1333, SCC = 0.13467, BMI = 5.499, BLOOD = factor("Pressure"), SEX=factor("male")) #male
+newdata7 <- data.frame(AGE = 3.1333, SCC = 0.13467, BMI = 5.499, BLOOD = factor("Pressure"), SEX=factor("female")) #female
+newone = predict(model52, newdata6)
+predictions <- predictInterval(model52, newdata6,  level = 0.95, seed = 111, n.sims = 10000)
+predictions1 <- predictInterval(model52, newdata7,  level = 0.95, seed = 111, n.sims = 10000)
+
+predictions
+predictions1
+
+
+```
+
+
+
+```{r}
+## Modeling diseases
+
+model252 <- glmer(DISEASE ~ AGE+SCC+BLOOD+BMI+(1|SEX), data = kidney, family = "binomial")
+model252
+```
+
+
+
+```{r}
+library(arm)
+newdata6 <- data.frame(AGE = 3.1333, SCC = 0.13467, BMI = 5.499, BLOOD = factor("Pressure"), SEX=factor("male"))
+newdata67 <- data.frame(AGE = 3.1333, SCC = 0.13467, BMI = 2.499, BLOOD = factor("Pressure"), SEX=factor("male"))
+
+predictions212 <- predict(model252, newdata6, type = "response")
+prediction221 = predict(model252, newdata67, type = "response")
+
+# View predicted values 
+invlogit(predictions212)
+invlogit(prediction221)
+
+```
+
+
+## Appendix
+```{r ref.label=knitr::all_labels(), echo = T, eval = F}
+
+```
